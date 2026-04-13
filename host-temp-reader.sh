@@ -1,24 +1,41 @@
 #!/bin/bash
 # Read host temps from virtio-serial and write to kernel module sysfs
+# Resilient to module reload (DKMS recompile) and virtio port loss
 VIRTIO=/dev/virtio-ports/host-temp
 SYSFS=/sys/devices/platform/coretemp.0/update_temps
 
 while true; do
-    [ ! -e "$VIRTIO" ] && sleep 5 && continue
-    [ ! -e "$SYSFS" ] && sleep 5 && continue
+    # Wait for virtio port
+    if [ ! -e "$VIRTIO" ]; then
+        sleep 5
+        continue
+    fi
 
-    # Read one line from virtio port
-    LINE=$(head -1 "$VIRTIO" 2>/dev/null)
+    # Wait for kernel module sysfs
+    if [ ! -e "$SYSFS" ]; then
+        sleep 5
+        continue
+    fi
+
+    # Read with timeout — don't block forever if sender stops
+    LINE=$(timeout 10 head -1 "$VIRTIO" 2>/dev/null)
     [ -z "$LINE" ] && sleep 1 && continue
+
+    # Verify sysfs still exists (module could have been unloaded during read)
+    [ ! -e "$SYSFS" ] && continue
 
     # Convert all values to millidegrees
     CONVERTED=""
     for token in $LINE; do
         key=$(echo "$token" | cut -d= -f1)
         val=$(echo "$token" | cut -d= -f2)
-        [ -n "$val" ] && CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
+        # Validate: must be a number
+        case "$val" in
+            ''|*[!0-9]*) continue ;;
+        esac
+        CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
     done
 
-    echo "$CONVERTED" > "$SYSFS" 2>/dev/null
+    [ -n "$CONVERTED" ] && echo "$CONVERTED" > "$SYSFS" 2>/dev/null
     sleep 1
 done
