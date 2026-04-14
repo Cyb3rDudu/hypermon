@@ -45,6 +45,10 @@ while true; do
                 # Power: milliwatts -> microwatts
                 CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
                 ;;
+            vcore|vdram|v12|v5|v33)
+                # Voltages: already in millivolts, pass through
+                CONVERTED="${CONVERTED} ${key}=${val}"
+                ;;
             *)
                 # Temperatures: degrees -> millidegrees
                 CONVERTED="${CONVERTED} ${key}=$((val * 1000))"

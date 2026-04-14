@@ -49,8 +49,26 @@ while true; do
         PREV_TIME=$CUR_TIME
     fi
 
+    # Voltages from nct6687 — all converted to millivolts
+    NCT=$(sensors nct6687-isa-0a20 2>/dev/null)
+    # CPU Vcore: 604.00 mV -> 604
+    VCORE=$(echo "$NCT" | grep 'CPU Vcore' | grep -oP '[0-9]+\.[0-9]+(?= mV)' | head -1)
+    VCORE=${VCORE%.*}  # truncate decimals
+    # DRAM: 932.00 mV -> 932
+    VDRAM=$(echo "$NCT" | grep 'DRAM' | grep -oP '[0-9]+\.[0-9]+(?= mV)' | head -1)
+    VDRAM=${VDRAM%.*}
+    # +12V: 12.12 V -> 12120 mV
+    V12=$(echo "$NCT" | grep '+12V' | grep -oP '[0-9]+\.[0-9]+(?= V)' | head -1)
+    V12=$(echo "$V12" | awk '{printf "%d", $1 * 1000}')
+    # +5V: 5.00 V -> 5000 mV
+    V5=$(echo "$NCT" | grep '+5V' | grep -oP '[0-9]+\.[0-9]+(?= V)' | head -1)
+    V5=$(echo "$V5" | awk '{printf "%d", $1 * 1000}')
+    # +3.3V: 3.34 V -> 3340 mV
+    V33=$(echo "$NCT" | grep '+3.3V' | grep -oP '[0-9]+\.[0-9]+(?= V)' | head -1)
+    V33=$(echo "$V33" | awk '{printf "%d", $1 * 1000}')
+
     # Send with timeout — don't hang if QEMU isn't listening
-    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
+    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW} vcore=${VCORE:-0} vdram=${VDRAM:-0} v12=${V12:-0} v5=${V5:-0} v33=${V33:-0}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
 
     sleep 5
 done

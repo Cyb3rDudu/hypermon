@@ -1,6 +1,6 @@
 # host-hwmon
 
-Expose Proxmox host CPU per-core temperatures, GPU temperature, fan RPMs, and CPU power inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
+Expose Proxmox host CPU per-core temperatures, GPU temperature, fan RPMs, CPU power, and motherboard voltages inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
 
 **No network required** — data flows through QEMU's virtio-serial channel directly via the hypervisor.
 
@@ -28,6 +28,7 @@ Proxmox Host                              QEMU VM
 - Reads CPU Package, per-core temperatures, and NVIDIA GPU temperature on the host
 - Reads fan RPMs (CPU Fan, Noctua pump, System Fan) from the motherboard sensor chip
 - Calculates CPU package power from Intel RAPL energy counters
+- Reads motherboard voltages (VCore, DRAM, +12V, +5V, +3.3V) from the nct6687 chip
 - Sends them every 5 seconds via a QEMU virtio-serial channel (no network)
 - A DKMS kernel module in the VM registers as `coretemp`, exposing all sensors as standard hwmon channels
 - btop displays per-core temperatures next to each CPU core bar — identical to running on bare metal
@@ -43,6 +44,11 @@ Proxmox Host                              QEMU VM
 | Noctua pump RPM | fan (fan2) | Host Noctua | RPM |
 | System Fan RPM | fan (fan3) | Host System Fan | RPM |
 | CPU Package power | power (power1) | Host CPU Package | microwatts |
+| CPU VCore | in (in0) | Host VCore | millivolts |
+| DRAM voltage | in (in1) | Host DRAM | millivolts |
+| +12V rail | in (in2) | Host +12V | millivolts |
+| +5V rail | in (in3) | Host +5V | millivolts |
+| +3.3V rail | in (in4) | Host +3.3V | millivolts |
 
 ## Requirements
 
@@ -109,6 +115,11 @@ Expected output:
 ```
 coretemp-isa-0000
 Adapter: ISA adapter
+Host VCore:       604.00 mV
+Host DRAM:        888.00 mV
+Host +12V:         12.12 V
+Host +5V:           5.01 V
+Host +3.3V:         3.34 V
 Host CPU Fan:    1791 RPM
 Host Noctua:        0 RPM
 Host System Fan: 1079 RPM
@@ -125,7 +136,7 @@ A3000 GPU:     +48.0°C
 
 The sender transmits a single line every 5 seconds:
 ```
-cpu=48 gpu=45 c0=46 c1=46 c2=46 c3=48 c4=46 c5=46 c6=46 c7=46 c8=46 c12=48 c16=46 c20=44 c24=48 c28=46 f1=1791 f2=0 f3=1079 pw=19120
+cpu=48 gpu=45 c0=46 c1=46 ... c28=46 f1=1791 f2=0 f3=1079 pw=19120 vcore=604 vdram=932 v12=12120 v5=5000 v33=3340
 ```
 
 | Key | Description | Unit |
@@ -137,8 +148,13 @@ cpu=48 gpu=45 c0=46 c1=46 c2=46 c3=48 c4=46 c5=46 c6=46 c7=46 c8=46 c12=48 c16=4
 | f2 | Noctua (pump header) RPM | RPM |
 | f3 | System Fan #1 RPM | RPM |
 | pw | CPU package power | milliwatts |
+| vcore | CPU VCore voltage | millivolts |
+| vdram | DRAM voltage | millivolts |
+| v12 | +12V rail voltage | millivolts |
+| v5 | +5V rail voltage | millivolts |
+| v33 | +3.3V rail voltage | millivolts |
 
-The reader converts temperature values to millidegrees, power milliwatts to microwatts, and passes fan RPMs as-is to the kernel module via:
+The reader converts temperature values to millidegrees, power milliwatts to microwatts, and passes fan RPMs and voltages as-is to the kernel module via:
 ```
 /sys/devices/platform/coretemp.0/update_temps
 ```
@@ -161,10 +177,10 @@ If you don't have an NVIDIA GPU, the sender will send `gpu=0`. The `A3000 GPU` s
 
 ## How it works
 
-1. **Sender** (host): Reads `sensors coretemp-isa-0000`, `sensors nct6687-isa-0a20` (fans), Intel RAPL energy counters (power), and optionally `nvidia-smi`, formats as `key=value` pairs, sends via `socat` to the QEMU virtio-serial Unix socket
+1. **Sender** (host): Reads `sensors coretemp-isa-0000`, `sensors nct6687-isa-0a20` (fans, voltages), Intel RAPL energy counters (power), and optionally `nvidia-smi`, formats as `key=value` pairs, sends via `socat` to the QEMU virtio-serial Unix socket
 2. **QEMU**: Bridges the Unix socket to `/dev/virtio-ports/host-temp` inside the VM
-3. **Reader** (VM): Reads from the virtio port, converts temperatures to millidegrees, power to microwatts, passes fan RPMs as-is, writes to the kernel module's sysfs interface
-4. **Kernel module**: Registers as a `coretemp` platform device with hwmon, exposing standard temperature, fan, and power sensors that btop/sensors/nvtop can read
+3. **Reader** (VM): Reads from the virtio port, converts temperatures to millidegrees, power to microwatts, passes fan RPMs and voltages as-is, writes to the kernel module's sysfs interface
+4. **Kernel module**: Registers as a `coretemp` platform device with hwmon, exposing standard temperature, fan, power, and voltage sensors that btop/sensors/nvtop can read
 
 ## Why coretemp?
 
