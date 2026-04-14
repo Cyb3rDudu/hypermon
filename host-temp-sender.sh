@@ -21,7 +21,14 @@ while true; do
         [ -n "$num" ] && [ -n "$temp" ] && CORES="${CORES} c${num}=${temp}"
     done < <(sensors coretemp-isa-0000 2>/dev/null | grep 'Core ')
 
-    GPU=$(nvidia-smi -i 0 --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null)
+    # GPU sensors from nvidia-smi: temp, power (W), graphics clock (MHz), memory clock (MHz)
+    NVIDIA=$(nvidia-smi -i 0 --query-gpu=temperature.gpu,power.draw,clocks.gr,clocks.mem --format=csv,noheader,nounits 2>/dev/null)
+    GPU=$(echo "$NVIDIA" | cut -d',' -f1 | tr -d ' ')
+    GPU_WATTS=$(echo "$NVIDIA" | cut -d',' -f2 | tr -d ' ')
+    GPU_CLK=$(echo "$NVIDIA" | cut -d',' -f3 | tr -d ' ')
+    GPU_MEM=$(echo "$NVIDIA" | cut -d',' -f4 | tr -d ' ')
+    # Convert GPU power from watts (decimal) to milliwatts (integer)
+    GPW=$(echo "$GPU_WATTS" | awk '{printf "%d", $1 * 1000}' 2>/dev/null)
 
     # Fan RPMs from nct6687
     FAN1=$(sensors nct6687-isa-0a20 2>/dev/null | grep 'CPU Fan' | grep -oP '[0-9]+(?= RPM)' | head -1)
@@ -80,7 +87,7 @@ while true; do
     done
 
     # Send with timeout — don't hang if QEMU isn't listening
-    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW} vcore=${VCORE:-0} vdram=${VDRAM:-0} v12=${V12:-0} v5=${V5:-0} v33=${V33:-0}${FREQS}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
+    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW} gpw=${GPW:-0} gcl=${GPU_CLK:-0} gmc=${GPU_MEM:-0} vcore=${VCORE:-0} vdram=${VDRAM:-0} v12=${V12:-0} v5=${V5:-0} v33=${V33:-0}${FREQS}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
 
     sleep 5
 done

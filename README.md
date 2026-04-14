@@ -1,6 +1,6 @@
 # host-hwmon
 
-Expose Proxmox host CPU per-core temperatures, GPU temperature, fan RPMs, CPU power, motherboard voltages, and per-core CPU frequencies inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
+Expose Proxmox host CPU per-core temperatures, GPU temperature and power, fan RPMs, CPU power, motherboard voltages, per-core CPU frequencies, and GPU clocks inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
 
 **No network required** — data flows through QEMU's virtio-serial channel directly via the hypervisor.
 
@@ -25,7 +25,7 @@ Proxmox Host                              QEMU VM
 
 ## What it does
 
-- Reads CPU Package, per-core temperatures, and NVIDIA GPU temperature on the host
+- Reads CPU Package, per-core temperatures, and NVIDIA GPU temperature, power, and clocks on the host
 - Reads fan RPMs (CPU Fan, Noctua pump, System Fan) from the motherboard sensor chip
 - Calculates CPU package power from Intel RAPL energy counters
 - Reads motherboard voltages (VCore, DRAM, +12V, +5V, +3.3V) from the nct6687 chip
@@ -45,19 +45,22 @@ Proxmox Host                              QEMU VM
 | Noctua pump RPM | fan (fan2) | Host Noctua | RPM |
 | System Fan RPM | fan (fan3) | Host System Fan | RPM |
 | CPU Package power | power (power1) | Host CPU Package | microwatts |
+| GPU power | power (power2) | Host A3000 GPU | microwatts |
 | CPU VCore | in (in0) | Host VCore | millivolts |
 | DRAM voltage | in (in1) | Host DRAM | millivolts |
 | +12V rail | in (in2) | Host +12V | millivolts |
 | +5V rail | in (in3) | Host +5V | millivolts |
 | +3.3V rail | in (in4) | Host +3.3V | millivolts |
 | Per-core CPU freq | custom sysfs | Core 0..28 | MHz |
+| GPU graphics clock | custom sysfs | Graphics | MHz |
+| GPU memory clock | custom sysfs | Memory | MHz |
 
 ## Requirements
 
 **Host (Proxmox VE):**
 - lm-sensors (`sensors` command)
 - socat
-- nvidia-smi (optional, for GPU temp)
+- nvidia-smi (optional, for GPU temp/power/clocks)
 
 **VM (Guest):**
 - Linux with DKMS support
@@ -126,6 +129,7 @@ Host CPU Fan:    1791 RPM
 Host Noctua:        0 RPM
 Host System Fan: 1079 RPM
 Host CPU Package:  19.12 W
+Host A3000 GPU:    14.48 W
 Package id 0:  +48.0°C
 Core 0:        +46.0°C
 Core 1:        +46.0°C
@@ -146,11 +150,21 @@ Core 1: 4606 MHz
 Core 28: 5000 MHz
 ```
 
+GPU clocks:
+```bash
+cat /sys/devices/platform/coretemp.0/gpu_clocks
+```
+
+```
+Graphics: 210 MHz
+Memory: 405 MHz
+```
+
 ## Data format
 
 The sender transmits a single line every 5 seconds:
 ```
-cpu=48 gpu=45 c0=46 ... c28=46 f1=1791 f2=0 f3=1079 pw=19120 vcore=604 vdram=932 v12=12120 v5=5000 v33=3340 hz0=4601 hz1=4606 ... hz28=5000
+cpu=48 gpu=45 c0=46 ... c28=46 f1=1791 f2=0 f3=1079 pw=19120 gpw=14480 gcl=210 gmc=405 vcore=604 vdram=932 v12=12120 v5=5000 v33=3340 hz0=4601 ... hz28=5000
 ```
 
 | Key | Description | Unit |
@@ -162,6 +176,9 @@ cpu=48 gpu=45 c0=46 ... c28=46 f1=1791 f2=0 f3=1079 pw=19120 vcore=604 vdram=932
 | f2 | Noctua (pump header) RPM | RPM |
 | f3 | System Fan #1 RPM | RPM |
 | pw | CPU package power | milliwatts |
+| gpw | GPU power draw | milliwatts |
+| gcl | GPU graphics clock | MHz |
+| gmc | GPU memory clock | MHz |
 | vcore | CPU VCore voltage | millivolts |
 | vdram | DRAM voltage | millivolts |
 | v12 | +12V rail voltage | millivolts |
@@ -195,7 +212,7 @@ If you don't have an NVIDIA GPU, the sender will send `gpu=0`. The `A3000 GPU` s
 1. **Sender** (host): Reads `sensors coretemp-isa-0000`, `sensors nct6687-isa-0a20` (fans, voltages), Intel RAPL energy counters (power), per-core CPU frequencies from sysfs, and optionally `nvidia-smi`, formats as `key=value` pairs, sends via `socat` to the QEMU virtio-serial Unix socket
 2. **QEMU**: Bridges the Unix socket to `/dev/virtio-ports/host-temp` inside the VM
 3. **Reader** (VM): Reads from the virtio port, converts temperatures to millidegrees, power to microwatts, passes fan RPMs and voltages as-is, writes to the kernel module's sysfs interface
-4. **Kernel module**: Registers as a `coretemp` platform device with hwmon, exposing standard temperature, fan, power, and voltage sensors that btop/sensors/nvtop can read. CPU frequencies are exposed via custom sysfs at `/sys/devices/platform/coretemp.0/host_freqs` (hwmon has no native freq type)
+4. **Kernel module**: Registers as a `coretemp` platform device with hwmon, exposing standard temperature, fan, power, and voltage sensors that btop/sensors/nvtop can read. CPU frequencies and GPU clocks are exposed via custom sysfs at `/sys/devices/platform/coretemp.0/host_freqs` and `gpu_clocks` (hwmon has no native freq type)
 
 ## Why coretemp?
 
@@ -215,6 +232,7 @@ The module auto-rebuilds on kernel updates via DKMS (`AUTOINSTALL=yes` in `dkms.
 | Sender can't connect to socket | VM must be running, check `/run/host-temp.sock` exists |
 | Temps stale after VM reboot | Restart `host-temp-sender` on host |
 | Fans show 0 RPM | Check `sensors nct6687-isa-0a20` on host, ensure nct6687 driver is loaded |
+| GPU power/clocks show 0 | Check `nvidia-smi` on host, ensure GPU is not passed through |
 
 ## License
 

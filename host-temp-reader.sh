@@ -41,7 +41,7 @@ while true; do
                 # Fan RPMs: pass through without conversion
                 CONVERTED="${CONVERTED} ${key}=${val}"
                 ;;
-            pw)
+            pw|gpw)
                 # Power: milliwatts -> microwatts
                 CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
                 ;;
@@ -49,8 +49,8 @@ while true; do
                 # Voltages: already in millivolts, pass through
                 CONVERTED="${CONVERTED} ${key}=${val}"
                 ;;
-            hz*)
-                # CPU frequencies: already in MHz, pass through
+            hz*|gcl|gmc)
+                # CPU/GPU frequencies: already in MHz, pass through
                 CONVERTED="${CONVERTED} ${key}=${val}"
                 ;;
             *)
