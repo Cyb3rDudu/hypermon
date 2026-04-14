@@ -67,8 +67,20 @@ while true; do
     V33=$(echo "$NCT" | grep '+3.3V' | grep -oP '[0-9]+\.[0-9]+(?= V)' | head -1)
     V33=$(echo "$V33" | awk '{printf "%d", $1 * 1000}')
 
+    # Per-core CPU frequencies (KHz -> MHz, keyed by core_id)
+    FREQS=""
+    for cpudir in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do
+        cpunum=$(echo "$cpudir" | grep -oP 'cpu\K[0-9]+')
+        coreid=$(cat "/sys/devices/system/cpu/cpu${cpunum}/topology/core_id" 2>/dev/null)
+        khz=$(cat "$cpudir" 2>/dev/null)
+        if [ -n "$coreid" ] && [ -n "$khz" ]; then
+            mhz=$((khz / 1000))
+            FREQS="${FREQS} hz${coreid}=${mhz}"
+        fi
+    done
+
     # Send with timeout — don't hang if QEMU isn't listening
-    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW} vcore=${VCORE:-0} vdram=${VDRAM:-0} v12=${V12:-0} v5=${V5:-0} v33=${V33:-0}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
+    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW} vcore=${VCORE:-0} vdram=${VDRAM:-0} v12=${V12:-0} v5=${V5:-0} v33=${V33:-0}${FREQS}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
 
     sleep 5
 done

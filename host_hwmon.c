@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * host_hwmon - Expose host CPU/GPU temps, fans, power, voltages as hwmon sensors in a VM
+ * host_hwmon - Expose host CPU/GPU temps, fans, power, voltages, freqs as hwmon sensors in a VM
  * Mimics coretemp format so btop shows per-core temperatures
  * Receives data via sysfs from userspace reader connected to virtio-serial
  */
@@ -26,6 +26,9 @@
 
 /* Voltage channels: VCore, DRAM, +12V, +5V, +3.3V */
 #define NUM_IN_CH 5
+
+/* CPU frequency: per-core MHz via custom sysfs (no hwmon freq type) */
+#define NUM_FREQ_CORES 14
 
 static struct platform_device *pdev;
 static struct device *hwmon_dev;
@@ -54,6 +57,8 @@ static const char *in_labels[NUM_IN_CH] = {
     "Host +5V",
     "Host +3.3V",
 };
+
+static long freqs[NUM_FREQ_CORES]; /* MHz */
 
 /* Core IDs matching the 245K topology */
 static const int core_ids[NUM_CORES] = {0,1,2,3,4,5,6,7,8,12,16,20,24,28};
@@ -173,11 +178,35 @@ static ssize_t update_temps_store(struct device *dev,
             voltages[3] = val;
         else if (sscanf(token, "v33=%ld", &val) == 1)
             voltages[4] = val;
+        else if (sscanf(token, "hz%d=%ld", &cn, &val) == 2) {
+            int fi;
+            for (fi = 0; fi < NUM_FREQ_CORES; fi++) {
+                if (core_ids[fi] == cn) {
+                    freqs[fi] = val;
+                    break;
+                }
+            }
+        }
     }
     mutex_unlock(&data_lock);
     return count;
 }
 static DEVICE_ATTR_WO(update_temps);
+
+/* Custom sysfs: show all host CPU frequencies as "coreID: MHz\n" */
+static ssize_t host_freqs_show(struct device *dev,
+    struct device_attribute *attr, char *buf)
+{
+    int i;
+    ssize_t len = 0;
+
+    mutex_lock(&data_lock);
+    for (i = 0; i < NUM_FREQ_CORES; i++)
+        len += sysfs_emit_at(buf, len, "Core %d: %ld MHz\n", core_ids[i], freqs[i]);
+    mutex_unlock(&data_lock);
+    return len;
+}
+static DEVICE_ATTR_RO(host_freqs);
 
 /* Temperature channel config */
 static const u32 temp_config[NUM_TEMP_CH + 1] = {
@@ -259,6 +288,13 @@ static int __init host_hwmon_init(void)
         return ret;
     }
 
+    ret = device_create_file(&pdev->dev, &dev_attr_host_freqs);
+    if (ret) {
+        device_remove_file(&pdev->dev, &dev_attr_update_temps);
+        platform_device_unregister(pdev);
+        return ret;
+    }
+
     /* Register hwmon as "coretemp" */
     hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev,
         "coretemp", NULL, &chip, NULL);
@@ -275,6 +311,7 @@ static int __init host_hwmon_init(void)
 
 static void __exit host_hwmon_exit(void)
 {
+    device_remove_file(&pdev->dev, &dev_attr_host_freqs);
     device_remove_file(&pdev->dev, &dev_attr_update_temps);
     platform_device_unregister(pdev);
     pr_info("host_hwmon: unregistered\n");
@@ -286,4 +323,4 @@ module_exit(host_hwmon_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("carrier-admin");
 MODULE_DESCRIPTION("Host sensors via virtio-serial, mimics coretemp for btop");
-MODULE_VERSION("3.3");
+MODULE_VERSION("3.4");

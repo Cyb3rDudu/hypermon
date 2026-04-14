@@ -49,6 +49,10 @@ while true; do
                 # Voltages: already in millivolts, pass through
                 CONVERTED="${CONVERTED} ${key}=${val}"
                 ;;
+            hz*)
+                # CPU frequencies: already in MHz, pass through
+                CONVERTED="${CONVERTED} ${key}=${val}"
+                ;;
             *)
                 # Temperatures: degrees -> millidegrees
                 CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
