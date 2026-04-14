@@ -1,7 +1,10 @@
 #!/bin/bash
 # Host sensor sender via virtio-serial socket
-# Sends CPU package, per-core temps, GPU temp, and fan RPMs to VM every 5 seconds
+# Sends CPU package, per-core temps, GPU temp, fan RPMs, and CPU power to VM every 5 seconds
 SOCK=/run/host-temp.sock
+RAPL=/sys/class/powercap/intel-rapl:0/energy_uj
+PREV_ENERGY=""
+PREV_TIME=""
 
 while true; do
     # Wait for socket
@@ -25,8 +28,29 @@ while true; do
     FAN2=$(sensors nct6687-isa-0a20 2>/dev/null | grep 'Pump Fan' | grep -oP '[0-9]+(?= RPM)' | head -1)
     FAN3=$(sensors nct6687-isa-0a20 2>/dev/null | grep 'System Fan #1' | grep -oP '[0-9]+(?= RPM)' | head -1)
 
+    # CPU Power via RAPL (milliwatts from energy counter delta)
+    PW=0
+    if [ -r "$RAPL" ]; then
+        CUR_ENERGY=$(cat "$RAPL" 2>/dev/null)
+        CUR_TIME=$(date +%s%N)
+        if [ -n "$PREV_ENERGY" ] && [ -n "$CUR_ENERGY" ]; then
+            DELTA_E=$((CUR_ENERGY - PREV_ENERGY))
+            DELTA_T=$((CUR_TIME - PREV_TIME))
+            # Handle counter wraparound
+            [ "$DELTA_E" -lt 0 ] && DELTA_E=0
+            if [ "$DELTA_T" -gt 0 ]; then
+                # energy_uj is microjoules, time is nanoseconds
+                # Power (mW) = delta_uJ / delta_ns * 1e6 = delta_uJ * 1000 / (delta_ns / 1000)
+                # Simplify: mW = delta_uJ * 1000000 / delta_ns
+                PW=$((DELTA_E * 1000000 / DELTA_T))
+            fi
+        fi
+        PREV_ENERGY=$CUR_ENERGY
+        PREV_TIME=$CUR_TIME
+    fi
+
     # Send with timeout — don't hang if QEMU isn't listening
-    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
+    echo "cpu=${PKG:-0} gpu=${GPU:-0}${CORES} f1=${FAN1:-0} f2=${FAN2:-0} f3=${FAN3:-0} pw=${PW}" | timeout 3 socat - UNIX-CONNECT:"$SOCK" 2>/dev/null
 
     sleep 5
 done

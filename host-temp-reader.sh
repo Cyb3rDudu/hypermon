@@ -24,7 +24,10 @@ while true; do
     # Verify sysfs still exists (module could have been unloaded during read)
     [ ! -e "$SYSFS" ] && continue
 
-    # Convert temperature values to millidegrees, pass fan RPMs as-is
+    # Convert values per sensor type:
+    #   temperatures: degrees -> millidegrees (*1000)
+    #   fan RPMs: pass through as-is
+    #   power (pw): milliwatts -> microwatts (*1000)
     CONVERTED=""
     for token in $LINE; do
         key=$(echo "$token" | cut -d= -f1)
@@ -33,12 +36,17 @@ while true; do
         case "$val" in
             ''|*[!0-9]*) continue ;;
         esac
-        # Fan RPMs: pass through without conversion
         case "$key" in
             f1|f2|f3)
+                # Fan RPMs: pass through without conversion
                 CONVERTED="${CONVERTED} ${key}=${val}"
                 ;;
+            pw)
+                # Power: milliwatts -> microwatts
+                CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
+                ;;
             *)
+                # Temperatures: degrees -> millidegrees
                 CONVERTED="${CONVERTED} ${key}=$((val * 1000))"
                 ;;
         esac

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * host_hwmon - Expose host CPU/GPU temperatures, fan RPMs as hwmon sensors in a VM
+ * host_hwmon - Expose host CPU/GPU temps, fan RPMs, CPU power as hwmon sensors in a VM
  * Mimics coretemp format so btop shows per-core temperatures
  * Receives data via sysfs from userspace reader connected to virtio-serial
  */
@@ -21,6 +21,9 @@
 /* Fan channels: CPU Fan, Noctua (pump header), System Fan */
 #define NUM_FAN_CH 3
 
+/* Power channels: CPU Package */
+#define NUM_POWER_CH 1
+
 static struct platform_device *pdev;
 static struct device *hwmon_dev;
 static DEFINE_MUTEX(data_lock);
@@ -35,6 +38,11 @@ static const char *fan_labels[NUM_FAN_CH] = {
     "Host System Fan",
 };
 
+static long power[NUM_POWER_CH]; /* microwatts */
+static const char *power_labels[NUM_POWER_CH] = {
+    "Host CPU Package",
+};
+
 /* Core IDs matching the 245K topology */
 static const int core_ids[NUM_CORES] = {0,1,2,3,4,5,6,7,8,12,16,20,24,28};
 
@@ -47,6 +55,10 @@ static umode_t host_is_visible(const void *data,
     }
     if (type == hwmon_fan && channel < NUM_FAN_CH) {
         if (attr == hwmon_fan_input || attr == hwmon_fan_label)
+            return 0444;
+    }
+    if (type == hwmon_power && channel < NUM_POWER_CH) {
+        if (attr == hwmon_power_input || attr == hwmon_power_label)
             return 0444;
     }
     return 0;
@@ -66,6 +78,11 @@ static int host_read(struct device *dev, enum hwmon_sensor_types type,
         mutex_unlock(&data_lock);
         return 0;
     }
+    if (type == hwmon_power && attr == hwmon_power_input && channel < NUM_POWER_CH) {
+        *val = power[channel];
+        mutex_unlock(&data_lock);
+        return 0;
+    }
     mutex_unlock(&data_lock);
     return -EOPNOTSUPP;
 }
@@ -79,6 +96,10 @@ static int host_read_string(struct device *dev,
     }
     if (type == hwmon_fan && attr == hwmon_fan_label && channel < NUM_FAN_CH) {
         *str = fan_labels[channel];
+        return 0;
+    }
+    if (type == hwmon_power && attr == hwmon_power_label && channel < NUM_POWER_CH) {
+        *str = power_labels[channel];
         return 0;
     }
     return -EOPNOTSUPP;
@@ -115,6 +136,8 @@ static ssize_t update_temps_store(struct device *dev,
             fans[1] = val;
         else if (sscanf(token, "f3=%ld", &val) == 1)
             fans[2] = val;
+        else if (sscanf(token, "pw=%ld", &val) == 1)
+            power[0] = val;
     }
     mutex_unlock(&data_lock);
     return count;
@@ -133,6 +156,12 @@ static const u32 fan_config[NUM_FAN_CH + 1] = {
     0
 };
 
+/* Power channel config */
+static const u32 power_config[NUM_POWER_CH + 1] = {
+    [0 ... NUM_POWER_CH - 1] = HWMON_P_INPUT | HWMON_P_LABEL,
+    0
+};
+
 static const struct hwmon_channel_info temp_info = {
     .type = hwmon_temp,
     .config = temp_config,
@@ -143,9 +172,15 @@ static const struct hwmon_channel_info fan_info = {
     .config = fan_config,
 };
 
+static const struct hwmon_channel_info power_info = {
+    .type = hwmon_power,
+    .config = power_config,
+};
+
 static const struct hwmon_channel_info * const info[] = {
     &temp_info,
     &fan_info,
+    &power_info,
     NULL
 };
 
@@ -186,8 +221,8 @@ static int __init host_hwmon_init(void)
         return PTR_ERR(hwmon_dev);
     }
 
-    pr_info("host_hwmon: registered with %d temp + %d fan channels\n",
-        NUM_TEMP_CH, NUM_FAN_CH);
+    pr_info("host_hwmon: registered with %d temp + %d fan + %d power channels\n",
+        NUM_TEMP_CH, NUM_FAN_CH, NUM_POWER_CH);
     return 0;
 }
 
@@ -204,4 +239,4 @@ module_exit(host_hwmon_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("carrier-admin");
 MODULE_DESCRIPTION("Host sensors via virtio-serial, mimics coretemp for btop");
-MODULE_VERSION("3.1");
+MODULE_VERSION("3.2");
