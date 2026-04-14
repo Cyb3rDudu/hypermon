@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460"/>
+      <stop offset="100%" style="stop-color:#533483"/>
+    </linearGradient>
+    <linearGradient id="temp" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#00b4d8"/>
+      <stop offset="50%" style="stop-color:#e77f24"/>
+      <stop offset="100%" style="stop-color:#e63946"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06d6a0"/>
+      <stop offset="100%" style="stop-color:#00b4d8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+
+  <!-- Inner glow circle -->
+  <circle cx="256" cy="240" r="160" fill="url(#glow)" opacity="0.4"/>
+
+  <!-- CPU chip outline -->
+  <rect x="156" y="140" width="200" height="200" rx="20" fill="none" stroke="#4a5568" stroke-width="3"/>
+
+  <!-- CPU pins top -->
+  <line x1="200" y1="140" x2="200" y2="115" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="240" y1="140" x2="240" y2="115" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="280" y1="140" x2="280" y2="115" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="320" y1="140" x2="320" y2="115" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- CPU pins bottom -->
+  <line x1="200" y1="340" x2="200" y2="365" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="240" y1="340" x2="240" y2="365" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="280" y1="340" x2="280" y2="365" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="320" y1="340" x2="320" y2="365" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- CPU pins left -->
+  <line x1="156" y1="185" x2="131" y2="185" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="156" y1="225" x2="131" y2="225" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="156" y1="265" x2="131" y2="265" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="156" y1="305" x2="131" y2="305" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- CPU pins right -->
+  <line x1="356" y1="185" x2="381" y2="185" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="356" y1="225" x2="381" y2="225" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="356" y1="265" x2="381" y2="265" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+  <line x1="356" y1="305" x2="381" y2="305" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Inner die -->
+  <rect x="186" y="170" width="140" height="140" rx="8" fill="#1a1a2e" stroke="#533483" stroke-width="2"/>
+
+  <!-- Temperature bar inside die -->
+  <rect x="206" y="195" width="20" height="90" rx="10" fill="#2d3748"/>
+  <rect x="206" y="240" width="20" height="45" rx="10" fill="url(#temp)"/>
+
+  <!-- Heartbeat/pulse line -->
+  <polyline points="240,260 255,260 262,225 270,285 278,240 285,260 310,260"
+            fill="none" stroke="url(#pulse)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Small sensor dots -->
+  <circle cx="250" cy="200" r="4" fill="#e63946" opacity="0.8"/>
+  <circle cx="275" cy="200" r="4" fill="#e77f24" opacity="0.8"/>
+  <circle cx="300" cy="200" r="4" fill="#06d6a0" opacity="0.8"/>
+
+  <!-- Virtio tunnel arrow (bottom) -->
+  <path d="M 210 370 L 210 400 Q 210 420 230 420 L 290 420 Q 310 420 310 400 L 310 370"
+        fill="none" stroke="#00b4d8" stroke-width="3" stroke-dasharray="8,4" opacity="0.7"/>
+  <polygon points="256,435 246,420 266,420" fill="#00b4d8" opacity="0.7"/>
+
+  <!-- Text -->
+  <text x="256" y="475" text-anchor="middle" font-family="monospace" font-size="42" font-weight="bold" fill="#e2e8f0" letter-spacing="4">HYPERMON</text>
+</svg>

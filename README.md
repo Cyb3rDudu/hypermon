@@ -1,6 +1,10 @@
-# host-hwmon
+# Hypermon
 
-Expose Proxmox host CPU per-core temperatures, GPU temperature and power, fan RPMs, CPU power, motherboard voltages, per-core CPU frequencies, and GPU clocks inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
+<p align="center">
+  <img src="logo.svg" alt="Hypermon Logo" width="200"/>
+</p>
+
+**Hypermon** exposes Proxmox host CPU per-core temperatures, GPU temperature and power, fan RPMs, CPU power, motherboard voltages, per-core CPU frequencies, and GPU clocks inside a QEMU VM as native hwmon sensors. btop and lm-sensors see them as `coretemp` — identical to bare metal.
 
 **No network required** — data flows through QEMU's virtio-serial channel directly via the hypervisor.
 
